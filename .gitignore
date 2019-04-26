@@ -1,0 +1,4 @@
+env/*
+resnet_fine*.pt
+__pycache__*
+*.pyc
