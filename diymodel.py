@@ -51,40 +51,13 @@ def cvt_state_dict(state_dict):
 class DIY_Model:
     def __init__(self, modelname, weightfile, class_numbers, gpus=None):
         # input check
-        bm = base_model(modelname)
-        if bm is None:
-            raise (RuntimeError("Error: invalid modelname = {}".format(modelname)))
-        if not os.path.exists(weightfile):
-            raise (
-                RuntimeError("Error: weightfile is not existed = {}".format(weightfile))
-            )
 
-        # create model @ both using in inception/renet18
-        self.bm = bm
-        self.model = models.__dict__[bm]()
-        fc_features = self.model.fc.in_features
-        self.model.fc = mlmcmodel.BuildMultiLabelModel(fc_features, class_numbers)
+        self.model = torch.load(weightfile)
 
-        """
-        if 'inception' in bm:
-            # auxiliary fc
-            aux_logits_fc_features = self.model.AuxLogits.fc.in_features
-            self.model.AuxLogits.fc = nn.Linear(\
-                aux_logits_fc_features, out_features=class_number, bias=True)
-            """
         if torch.cuda.is_available():
             self.model.cuda()
         else:
             self.model.cpu()
-
-        # load model weight
-        if torch.cuda.is_available():
-            checkpoint = torch.load(weightfile)
-        else:
-            checkpoint = torch.load(weightfile, map_location="cpu")
-
-        self.model.load_state_dict(cvt_state_dict(checkpoint["state_dict"]))
-        print("=> loaded checkpoint '{}'.".format(weightfile))
 
         # switch to evaluate mode
         self.model.eval()
@@ -94,34 +67,20 @@ class DIY_Model:
         normalize = transforms.Normalize(
             mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
         )
-        # normalize = transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.22, 0.22, 0.22])
-        if "inception" in bm:
-            self.transform = transforms.Compose(
-                [
-                    transforms.Resize(320),
-                    transforms.CenterCrop(299),
-                    transforms.ToTensor(),
-                    normalize,
-                ]
-            )
-        else:  # resnet18
-            self.transform = transforms.Compose(
-                [
-                    transforms.Resize(224),  # raw = 256
-                    transforms.CenterCrop(224),
-                    # transforms.Resize(224),
-                    transforms.ToTensor(),
-                    normalize,
-                ]
-            )
+        self.transform = transforms.Compose(
+            [
+                transforms.Resize(64),  # raw = 256
+                transforms.CenterCrop(64),
+                # transforms.Resize(224),
+                transforms.ToTensor(),
+                normalize,
+            ]
+        )
 
     def process(self, img):
         input = self.transform(img)
 
-        if "inception" in self.bm:
-            input = input.reshape([1, 3, 299, 299])
-        else:
-            input = input.reshape([1, 3, 224, 224])
+        input = input.reshape([1, 3, 64, 64])
 
         if torch.cuda.is_available():
             output = self.model(input.cuda())
